@@ -4,12 +4,12 @@ drop table if exists consolidated_table_base_store;
 create temp table consolidated_table_base_store as (
 select
 	  x.*
-	, xx.scheduled_hours_capped
-	, xx.sun_scheduled_hours_capped
-	, xx.sun_planned_hours 
+	, xx.a
+	, xx.b
+	, xx.c 
 from (
 select
-	  case when store_region in ('PN','RM') then 'MP' else store_region end as store_region
+	  case when store_region in ('','') then '' else store_region end as store_region
 	, store_id
 	, store_name_abb
 	, store_name
@@ -49,11 +49,11 @@ select
 	, sum(case when project_peanut_store_type = 'Non Project Peanut Store' then shopper_paid_hours else 0 end) as shopper_paid_hours_hv
 	, sum(reg_shopper_available_hours) as reg_shopper_available_hours --store paid avail
 	, sum(shopper_paid_hours) as shopper_paid_hours --store paid avail/paid util
-	, sum(case when project_peanut_store_type = 'Non Project Peanut Store' then reg_shopper_picked_hours else 0 end) as reg_shopper_picked_hours_hv
-	, sum(case when project_peanut_store_type = 'Non Project Peanut Store' then reg_shopper_dropoff_hours else 0 end) as reg_shopper_dropoff_hours_hv
-	, sum(case when project_peanut_store_type = 'Non Project Peanut Store' then otj_paid_hours else 0 end) as otj_paid_hours_hv
-	, sum(case when project_peanut_store_type = 'Non Project Peanut Store' then paid_hours  else 0 end) as paid_hours_hv
-	, sum(case when project_peanut_store_type = 'Non Project Peanut Store' then time_available  else 0 end) as available_hours_hv
+	, sum(case when x = '' then reg_shopper_picked_hours else 0 end) as reg_shopper_picked_hours_hv
+	, sum(case when x = '' then reg_shopper_dropoff_hours else 0 end) as reg_shopper_dropoff_hours_hv
+	, sum(case when x = '' then otj_paid_hours else 0 end) as otj_paid_hours_hv
+	, sum(case when x = '' then paid_hours  else 0 end) as paid_hours_hv
+	, sum(case when x = '' then time_available  else 0 end) as available_hours_hv
 	, sum(reg_shopper_picked_hours) as reg_shopper_picked_hours --shopper paid util store 
 	, sum(reg_shopper_dropoff_hours) as reg_shopper_dropoff_hours --shopper paid util store 
 	, sum(otj_paid_hours) as otj_paid_hours --shopper paid util store 
@@ -71,7 +71,7 @@ group by 1,2,3,4,5
 order by 1,2) x
 left join 
 (select 
-	  case when store_region in ('PN','RM') then 'MP' else store_region end as store_region
+	  case when store_region in ('','') then '' else store_region end as store_region
 	, store_id
 	, store_name_abb
 	, store_name
@@ -863,9 +863,8 @@ from quality_concessions_base qcb
 group by 1,2,3
 );
 --------------------------------------------------------------------------------------- 
---QUALITY CONCESSIONS Final
-drop table if exists quality_concession_final;
-create temp table quality_concession_final as (
+drop table if exists qs_final;
+create temp table qs_final as (
 select 
 	  ql.region_abbr
 	, ql.store_code
@@ -885,9 +884,8 @@ join quality_concession_t4 qt on
 	ql.store_code = qt.store_code 
 );
 --------------------------------------------------------------------------------------- 
---FOOD SAFETY Base Store
-drop table if exists food_safety_base_store;
-create temp table food_safety_base_store as (
+drop table if exists fs_base_store;
+create temp table fs_base_store as (
 select 
 	  weekend_date 
 	, region_abbr 
@@ -906,9 +904,8 @@ group by 1,2,3,4
 order by 1,2,4
 );
 --------------------------------------------------------------------------------------- 
---FOOD SAFETY Base Region
-drop table if exists food_safety_base_region;
-create temp table food_safety_base_region as (
+drop table if exists fs_region;
+create temp table fs_region as (
 select 
 	  weekend_date 
 	, region_abbr 
@@ -923,9 +920,8 @@ group by 1,2,3,4
 order by 1,2,4
 );
 --------------------------------------------------------------------------------------- 
---FOOD SAFETY Base Global
-drop table if exists food_safety_base_global;
-create temp table food_safety_base_global as (
+drop table if exists fs_global;
+create temp table fs_global as (
 select 
 	  weekend_date 
 	, 'GL' as region_abbr 
@@ -940,9 +936,8 @@ group by 1,2,3,4
 order by 1,2,4
 );
 --------------------------------------------------------------------------------------- 
---FOOD SAFETY Base
-drop table if exists food_safety_base;
-create temp table food_safety_base as (
+drop table if exists fs_base;
+create temp table fs_base as (
 select * from food_safety_base_store 
 union 
 select * from food_safety_base_region 
@@ -950,9 +945,8 @@ union
 select * from food_safety_base_global
 );
 --------------------------------------------------------------------------------------- 
---FOOD SAFETY LW
-drop table if exists food_safety_lw;
-create temp table food_safety_lw as (
+drop table if exists fs_lw;
+create temp table fs_lw as (
 select 
 	  weekend_date
 	, region_abbr
@@ -960,16 +954,15 @@ select
 	, store_name_abb
 	, round(sum(bagging_compliant)/(sum(bagging_opportunities)*1.0),4) as bagging_compliance_pct
 	, round(1-((sum(temp_miss))/(sum(temp_opportunities)*1.0)),4) as temp_compliance_pct 
-from food_safety_base 
+from fs_base 
 where 
 	weekend_date  = date(date_add('week',-1,date_trunc('week',GETDATE())+'5 days'::interval)) 
  group by 1,2,3,4
  order by 2,4
 );
 --------------------------------------------------------------------------------------- 
---FOOD SAFETY TMINUS 2
- drop table if exists food_safety_tminus2;
-create temp table food_safety_tminus2 as (
+ drop table if exists fs_tm2;
+create temp table fs_tm2 as (
 select 
 	  weekend_date
 	, region_abbr
@@ -977,23 +970,22 @@ select
 	, store_name_abb
 	, round(sum(bagging_compliant)/(sum(bagging_opportunities)*1.0),4) as bagging_compliance_pct
 	, round(1-((sum(temp_miss))/(sum(temp_opportunities)*1.0)),4) as temp_compliance_pct 
-from food_safety_base 
+from fs_base 
 where 
 	weekend_date  <= date(date_add('week',-2,date_trunc('week',GETDATE())+'5 days'::interval)) 
  group by 1,2,3,4
 );
  --------------------------------------------------------------------------------------- 
---FOOD SAFETY WOW
-drop table if exists food_safety_wow;
-create temp table food_safety_wow as (
+drop table if exists fs_wow;
+create temp table fs_wow as (
 select 
 	  fl.region_abbr
 	, fl.store_id
 	, fl.store_name_abb
 	, ((sum(fl.bagging_compliance_pct) - sum(ftm.bagging_compliance_pct))*100)*100 as bagging_compliance_pct_wow
 	, ((sum(fl.temp_compliance_pct) - sum(ftm.temp_compliance_pct))*100)*100 as temp_compliance_pct_wow
-from food_safety_lw fl 
-join food_safety_tminus2 ftm on 
+from fs_lw fl 
+join fs_tm2 ftm on 
 	fl.region_abbr = ftm.region_abbr and 
 	fl.store_id = ftm.store_id 
 group by 1,2,3
@@ -1001,23 +993,22 @@ order by 1,3
 );
  
 --------------------------------------------------------------------------------------- 
---FOOD SAFETY T4W
-drop table if exists food_safety_t4;
-create temp table food_safety_t4 as (
+drop table if exists fs_t4;
+create temp table fs_t4 as (
 select 
 	  region_abbr
 	, store_id
 	, store_name_abb
 	, round(sum(bagging_compliant)/(sum(bagging_opportunities)*1.0),4) as bagging_compliance_pct_t4
 	, round(1-((sum(temp_miss))/(sum(temp_opportunities)*1.0)),4) as temp_compliance_pct_t4  
-from food_safety_base 
+from fs_base 
 group by 1,2,3
 order by 1,3
 );
 ---------------------------------------------------------------------------------------
---FOOD SAFETY Final
-drop table if exists food_safety_final;
-create temp table food_safety_final as (
+--fs
+drop table if exists fs_final;
+create temp table fs_final as (
 select 
 	  fl.region_abbr
 	, fl.store_id
@@ -1028,11 +1019,11 @@ select
 	, temp_compliance_pct_wow
 	, bagging_compliance_pct_t4
 	, temp_compliance_pct_t4
-from food_safety_lw fl 
-join food_safety_wow fw on 
+from fs_lw fl 
+join fs_wow fw on 
 	fl.region_abbr = fw.region_abbr and 
 	fl.store_id = fw.store_id 
-join food_safety_t4 ft on 
+join fs_t4 ft on 
 	fl.region_abbr = ft.region_abbr and
 	fl.store_id = ft.store_id 
 order by 1,3
